@@ -80,6 +80,11 @@ fig.update_yaxes(autorange="reversed", fixedrange=True, automargin=True)
 st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "scrollZoom": False})
 if question == "시험 준비 시점":
     st.caption("시험 직전에 또는 학기 중 꾸준히 준비했다고 응답한 학생을 비교합니다.")
+elif question == "혼공 vs 친구와 공부" and "해당 없음" in order:
+    st.caption(
+        "‘해당 없음’은 중간고사 준비 방식 문항의 별도 선택지입니다. "
+        "설문 자료에는 선택한 이유가 없어 시험을 준비하지 않았다고 해석할 수 없습니다."
+    )
 st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답을 고른 학생 수입니다.")
 
 left, right = st.columns(2)
