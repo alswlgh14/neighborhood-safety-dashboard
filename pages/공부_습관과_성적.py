@@ -72,40 +72,36 @@ st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답�
 left, right = st.columns(2)
 with left:
     st.subheader("전체 성적 분포")
-    st.caption("점 하나는 해당 응답에서 한 성적 등급이 차지하는 비율입니다.")
-    dist = data.groupby(["응답", "성적 등급"], as_index=False).size()
-    dist = dist.rename(columns={"size": "학생 수"})
-    dist["응답자 수"] = dist.groupby("응답")["학생 수"].transform("sum")
+    st.caption("같은 등급에서 점이 높을수록 그 등급을 받은 학생의 비율이 높습니다.")
+    counts = pd.crosstab(data["응답"], data["성적 등급"]).reindex(
+        index=order, columns=GRADES, fill_value=0
+    )
+    totals = counts.sum(axis=1)
+    dist = counts.stack().rename("학생 수").reset_index()
+    dist["응답자 수"] = dist["응답"].map(totals)
     dist["비율"] = dist["학생 수"] / dist["응답자 수"] * 100
-    # Separate grades vertically within each response so equal percentages remain visible.
-    row_positions = dict(zip(order, range(len(order))))
-    grade_offsets = {grade: (i - 3.5) * 0.09 for i, grade in enumerate(GRADES)}
-    dist["점 위치"] = dist["응답"].map(row_positions) + dist["성적 등급"].map(grade_offsets)
+    dist["응답 그룹"] = dist["응답"] + " (" + dist["응답자 수"].astype(str) + "명)"
+    groups = [f"{label} ({totals[label]}명)" for label in order]
+    # Slight offsets leave room for equal rates within a grade.
+    offsets = {label: (i - (len(order) - 1) / 2) * 0.14 for i, label in enumerate(order)}
+    dist["등급 위치"] = dist["성적 등급"].map(dict(zip(GRADES, range(len(GRADES)))))
+    dist["등급 위치"] += dist["응답"].map(offsets)
     chart = px.scatter(
-        dist, x="비율", y="점 위치", color="성적 등급", symbol="성적 등급",
-        category_orders={"성적 등급": GRADES},
-        color_discrete_map=dict(zip(GRADES, [
-            "#e77368", "#ed9b61", "#dfbf65", "#a8c771",
-            "#58bdad", "#61a9e4", "#b18fec", "#ed8bbc",
-        ])),
-        symbol_map=dict(zip(GRADES, [
-            "circle", "square", "diamond", "cross", "x",
-            "triangle-up", "triangle-down", "star",
-        ])),
-        labels={"비율": "응답별 등급 비율 (%)"},
+        dist, x="등급 위치", y="비율", color="응답 그룹", symbol="응답 그룹",
+        category_orders={"응답 그룹": groups},
+        color_discrete_sequence=["#65bcb1", "#e7a46e", "#9c9bdb", "#cc84a2", "#adc57d"],
+        symbol_sequence=["circle", "diamond", "square", "triangle-up", "cross"],
         custom_data=["응답", "성적 등급", "학생 수", "응답자 수"],
     )
     chart.update_traces(
-        marker=dict(size=10, opacity=1),
+        marker=dict(size=9, opacity=1),
         hovertemplate="%{customdata[0]} · %{customdata[1]}<br>"
-                      "%{x:.1f}% (%{customdata[2]}/%{customdata[3]}명)<extra></extra>",
+                      "%{y:.1f}% (%{customdata[2]}/%{customdata[3]}명)<extra></extra>",
     )
-    chart.update_yaxes(title=None, tickmode="array", tickvals=list(row_positions.values()),
-                       ticktext=order, range=[len(order) - 0.5, -0.5], showgrid=True)
-    chart.update_layout(height=max(350, 118 + 78 * len(order)),
-                        xaxis=dict(range=[-3, 103], tickvals=[0, 20, 40, 60, 80, 100],
-                                   ticksuffix="%", title="응답별 등급 비율"),
-                        margin=dict(l=0, r=8, t=56, b=0),
+    chart.update_xaxes(title=None, tickmode="array", tickvals=list(range(len(GRADES))),
+                       ticktext=GRADES, range=[-0.55, len(GRADES) - 0.45], showgrid=False)
+    chart.update_yaxes(title="학생 비율", ticksuffix="%", rangemode="tozero")
+    chart.update_layout(height=350, margin=dict(l=0, r=8, t=50, b=0),
                         legend=dict(orientation="h", y=1, yanchor="bottom", title=None))
     st.plotly_chart(chart, width="stretch")
 
