@@ -71,9 +71,13 @@ fig = px.bar(
     labels={"비율": f"{threshold} 비율 (%)", "응답": ""},
 )
 fig.update_traces(textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>%{text}<extra></extra>")
-fig.update_layout(height=125 + 42 * len(order), margin=dict(l=0, r=116, t=8, b=0), xaxis_range=[0, 100])
-fig.update_yaxes(autorange="reversed")
-st.plotly_chart(fig, width="stretch")
+# Start at zero and leave room for the value labels near the longest bar.
+axis_max = min(100, max(30, (int(rates["비율"].max() / 10) + 1) * 10))
+fig.update_layout(height=125 + 42 * len(order), margin=dict(l=8, r=100, t=8, b=8),
+                  dragmode=False)
+fig.update_xaxes(range=[0, axis_max], fixedrange=True, automargin=True)
+fig.update_yaxes(autorange="reversed", fixedrange=True, automargin=True)
+st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "scrollZoom": False})
 if question == "시험 준비 시점":
     st.caption("시험 직전에 또는 학기 중 꾸준히 준비했다고 응답한 학생을 비교합니다.")
 st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답을 고른 학생 수입니다.")
