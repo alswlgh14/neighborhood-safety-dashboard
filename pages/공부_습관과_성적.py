@@ -21,9 +21,9 @@ with st.sidebar:
     st.caption("여기서 고른 습관이 본문 버튼에 표시됩니다.")
     questions = st.multiselect("비교할 공부 습관", list(QUESTIONS), default=list(QUESTIONS)[:3])
     courses = st.multiselect("과목 코드 (비워두면 전체)", sorted(raw.course_id.unique()))
-    threshold = st.selectbox("높은 성적의 기준", ["A+만", "A0 이상", "B+ 이상"], index=1)
+    threshold = st.selectbox("높은 성적의 기준", ["AA만", "BA 이상", "BB 이상"], index=1)
 
-cutoff = {"A+만": 7, "A0 이상": 6, "B+ 이상": 5}[threshold]
+cutoff = {"AA만": 7, "BA 이상": 6, "BB 이상": 5}[threshold]
 data = raw[raw.course_id.isin(courses)].copy() if courses else raw.copy()
 data["높은 성적"] = data.grade.ge(cutoff)
 
@@ -85,7 +85,7 @@ st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답�
 left, right = st.columns(2)
 with left:
     st.subheader("공부 습관별 성적 분포")
-    bands = ["F–C0", "C+–B+", "A0–A+"]
+    bands = ["Fail–DC", "CC–BB", "BA–AA"]
     grade_bands = dict(zip(range(8), [bands[0]] * 3 + [bands[1]] * 3 + [bands[2]] * 2))
     distribution = data.assign(성적구간=data.grade.map(grade_bands))
     counts = pd.crosstab(distribution["응답"], distribution["성적구간"]).reindex(
@@ -102,7 +102,7 @@ with left:
         dist, x="비율", y="응답 그룹", color="성적구간", text="표시",
         orientation="h", barmode="stack",
         category_orders={"성적구간": bands, "응답 그룹": groups},
-        color_discrete_map={"F–C0": "#d8977e", "C+–B+": "#c6cad4", "A0–A+": "#65bcb1"},
+        color_discrete_map={"Fail–DC": "#d8977e", "CC–BB": "#c6cad4", "BA–AA": "#65bcb1"},
         custom_data=["성적구간", "학생 수", "응답자 수"],
         labels={"응답 그룹": "", "비율": "학생 비율 (%)"},
     )
@@ -120,7 +120,7 @@ with left:
 
 with right:
     st.subheader("성적 집단별 공부 습관")
-    above, below = threshold, {"A+만": "A+ 미만", "A0 이상": "A0 미만", "B+ 이상": "B+ 미만"}[threshold]
+    above, below = threshold, {"AA만": "AA 미만", "BA 이상": "BA 미만", "BB 이상": "BB 미만"}[threshold]
     data["성적 집단"] = data["높은 성적"].map({True: above, False: below})
     mix = pd.crosstab(data["응답"], data["성적 집단"]).stack().rename("학생 수").reset_index()
     mix["비율"] = mix["학생 수"] / mix.groupby("성적 집단")["학생 수"].transform("sum") * 100
@@ -138,9 +138,8 @@ with right:
 
 st.caption("응답자가 적은 항목은 한 명의 성적이 비율을 크게 바꿀 수 있습니다. 설문과 성적에서 관찰된 차이에는 과목 난이도 등 다른 요인도 영향을 줄 수 있습니다.")
 with st.expander("성적 표기 기준"):
-    st.write("원자료의 8개 등급을 순서대로 한국식 표기에 대응했습니다.")
-    st.caption("AA → A+, BA → A0, BB → B+, CB → B0, CC → C+, DC → C0, DD → D+, Fail → F")
-    st.caption("등급 이름만 바꿨으며 학점이나 평점으로 환산하지 않았습니다.")
+    st.write("원자료의 등급을 그대로 사용합니다. 높은 순서대로 AA, BA, BB, CB, CC, DC, DD, Fail입니다.")
+    st.caption("‘BA 이상’은 AA와 BA를 포함합니다.")
 st.markdown(
     "[UCI 원자료 및 코드북](https://archive.ics.uci.edu/dataset/856/higher+education+students+performance+evaluation)"
     " · Nevriye Yilmaz 및 Boran Şekeroğlu · CC BY 4.0"
