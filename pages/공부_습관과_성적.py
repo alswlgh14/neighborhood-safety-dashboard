@@ -38,6 +38,12 @@ if not questions:
 
 question = st.radio("살펴볼 공부 습관", questions, horizontal=True)
 column, labels = QUESTIONS[question]
+if question == "시험 준비 시점":
+    data = data[data[column].isin([1, 2])].copy()
+    if data.empty:
+        st.info("선택한 과목에 비교할 시험 준비 응답이 없습니다.")
+        st.stop()
+
 data["응답"] = data[column].map(labels)
 order = [label for label in labels.values() if label in data["응답"].values]
 
@@ -50,7 +56,7 @@ rates["표시"] = rates.apply(
 )
 
 sample, result = st.columns(2)
-sample.metric("선택한 학생 수", f"{len(data)}명")
+sample.metric("분석 대상 학생 수", f"{len(data)}명")
 result.metric(f"{threshold} 비율", f"{data['높은 성적'].mean():.1%}",
               help=f"{data['높은 성적'].sum()}명 / {len(data)}명")
 st.subheader(f"{question}에 따라 {threshold} 비율은?")
@@ -70,47 +76,40 @@ fig.update_traces(textposition="outside", cliponaxis=False, hovertemplate="%{y}<
 fig.update_layout(height=125 + 42 * len(order), margin=dict(l=0, r=116, t=8, b=0), xaxis_range=[0, 100])
 fig.update_yaxes(autorange="reversed")
 st.plotly_chart(fig, width="stretch")
+if question == "시험 준비 시점":
+    st.caption("시험 직전에 또는 학기 중 꾸준히 준비했다고 응답한 학생을 비교합니다.")
 st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답을 고른 학생 수입니다.")
 
 left, right = st.columns(2)
 with left:
     st.subheader("전체 성적 분포")
-    distribution_data = data
-    if question == "시험 준비 시점":
-        distribution_data = data[data["응답"].ne("준비하지 않음")]
-    distribution_order = [label for label in order if label in distribution_data["응답"].values]
-    if distribution_data.empty:
-        st.info("선택한 과목에 시험을 준비한 학생의 응답이 없습니다.")
-    else:
-        counts = pd.crosstab(distribution_data["응답"], distribution_data["성적 등급"]).reindex(
-            index=distribution_order, columns=GRADES, fill_value=0
-        )
-        totals = counts.sum(axis=1)
-        dist = counts.stack().rename("학생 수").reset_index()
-        dist["응답자 수"] = dist["응답"].map(totals)
-        dist["비율"] = dist["학생 수"] / dist["응답자 수"] * 100
-        dist["응답 그룹"] = dist["응답"] + " (" + dist["응답자 수"].astype(str) + "명)"
-        groups = [f"{label} ({totals[label]}명)" for label in distribution_order]
-        chart = px.scatter(
-            dist, x="성적 등급", y="비율", color="응답 그룹",
-            category_orders={"성적 등급": GRADES, "응답 그룹": groups},
-            color_discrete_sequence=["#63b9ad", "#e9a375", "#a6a3dc", "#c38da0", "#a6bc83"],
-            labels={"비율": "학생 비율 (%)"},
-            custom_data=["학생 수", "응답자 수"],
-        )
-        chart.update_traces(
-            marker=dict(size=8, opacity=0.82),
-            hovertemplate="%{y:.1f}% (%{customdata[0]}/%{customdata[1]}명)",
-        )
-        chart.update_xaxes(title=None, showgrid=False)
-        chart.update_yaxes(rangemode="tozero")
-        chart.update_layout(height=325, margin=dict(l=0, r=8, t=36, b=0),
-                            hovermode="x unified",
-                            legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
-        st.plotly_chart(chart, width="stretch")
-    excluded = len(data) - len(distribution_data)
-    if excluded:
-        st.caption(f"이 차트에서는 ‘준비하지 않음’ 응답 {excluded}명을 제외했습니다.")
+    counts = pd.crosstab(data["응답"], data["성적 등급"]).reindex(
+        index=order, columns=GRADES, fill_value=0
+    )
+    totals = counts.sum(axis=1)
+    dist = counts.stack().rename("학생 수").reset_index()
+    dist["응답자 수"] = dist["응답"].map(totals)
+    dist["비율"] = dist["학생 수"] / dist["응답자 수"] * 100
+    dist["응답 그룹"] = dist["응답"] + " (" + dist["응답자 수"].astype(str) + "명)"
+    groups = [f"{label} ({totals[label]}명)" for label in order]
+    chart = px.scatter(
+        dist, x="성적 등급", y="비율", color="응답 그룹",
+        category_orders={"성적 등급": GRADES, "응답 그룹": groups},
+        color_discrete_sequence=["#63b9ad", "#e9a375", "#a6a3dc", "#c38da0", "#a6bc83"],
+        labels={"비율": "학생 비율 (%)"},
+        custom_data=["학생 수", "응답자 수"],
+    )
+    chart.update_traces(
+        marker=dict(size=8, opacity=0.82),
+        hovertemplate="%{y:.1f}% (%{customdata[0]}/%{customdata[1]}명)",
+    )
+    chart.update_xaxes(title=None, showgrid=False)
+    chart.update_yaxes(rangemode="tozero")
+    chart.update_layout(height=325, margin=dict(l=0, r=8, t=36, b=0),
+                        hovermode="x unified",
+                        legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
+    st.plotly_chart(chart, width="stretch")
+
 
 with right:
     st.subheader("성적 집단별 공부 습관")
