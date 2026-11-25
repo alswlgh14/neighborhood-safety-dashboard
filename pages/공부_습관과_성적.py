@@ -49,7 +49,10 @@ rates["표시"] = rates.apply(
     lambda r: f"{r['비율']:.1f}% · {r['고성적']}/{r['학생']}명", axis=1
 )
 
-st.caption(f"선택한 과목의 학생 {len(data)}명 · {threshold} {data['높은 성적'].sum()}명")
+sample, result = st.columns(2)
+sample.metric("선택한 학생 수", f"{len(data)}명")
+result.metric(f"{threshold} 비율", f"{data['높은 성적'].mean():.1%}",
+              help=f"{data['높은 성적'].sum()}명 / {len(data)}명")
 st.subheader(f"{question}에 따라 {threshold} 비율은?")
 summary = rates.set_index("응답")
 if question == "시험 준비 시점" and all(
@@ -72,7 +75,6 @@ st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답�
 left, right = st.columns(2)
 with left:
     st.subheader("전체 성적 분포")
-    st.caption("같은 등급에서 점이 높을수록 그 등급을 받은 학생의 비율이 높습니다.")
     counts = pd.crosstab(data["응답"], data["성적 등급"]).reindex(
         index=order, columns=GRADES, fill_value=0
     )
@@ -82,44 +84,40 @@ with left:
     dist["비율"] = dist["학생 수"] / dist["응답자 수"] * 100
     dist["응답 그룹"] = dist["응답"] + " (" + dist["응답자 수"].astype(str) + "명)"
     groups = [f"{label} ({totals[label]}명)" for label in order]
-    # Slight offsets leave room for equal rates within a grade.
-    offsets = {label: (i - (len(order) - 1) / 2) * 0.14 for i, label in enumerate(order)}
-    dist["등급 위치"] = dist["성적 등급"].map(dict(zip(GRADES, range(len(GRADES)))))
-    dist["등급 위치"] += dist["응답"].map(offsets)
     chart = px.scatter(
-        dist, x="등급 위치", y="비율", color="응답 그룹", symbol="응답 그룹",
-        category_orders={"응답 그룹": groups},
-        color_discrete_sequence=["#65bcb1", "#e7a46e", "#9c9bdb", "#cc84a2", "#adc57d"],
-        symbol_sequence=["circle", "diamond", "square", "triangle-up", "cross"],
-        custom_data=["응답", "성적 등급", "학생 수", "응답자 수"],
+        dist, x="성적 등급", y="비율", color="응답 그룹",
+        category_orders={"성적 등급": GRADES, "응답 그룹": groups},
+        color_discrete_sequence=["#63b9ad", "#e9a375", "#a6a3dc", "#c38da0", "#a6bc83"],
+        labels={"비율": "학생 비율 (%)"},
+        custom_data=["학생 수", "응답자 수"],
     )
     chart.update_traces(
-        marker=dict(size=9, opacity=1),
-        hovertemplate="%{customdata[0]} · %{customdata[1]}<br>"
-                      "%{y:.1f}% (%{customdata[2]}/%{customdata[3]}명)<extra></extra>",
+        marker=dict(size=8, opacity=0.82),
+        hovertemplate="%{y:.1f}% (%{customdata[0]}/%{customdata[1]}명)",
     )
-    chart.update_xaxes(title=None, tickmode="array", tickvals=list(range(len(GRADES))),
-                       ticktext=GRADES, range=[-0.55, len(GRADES) - 0.45], showgrid=False)
-    chart.update_yaxes(title="학생 비율", ticksuffix="%", rangemode="tozero")
-    chart.update_layout(height=350, margin=dict(l=0, r=8, t=50, b=0),
-                        legend=dict(orientation="h", y=1, yanchor="bottom", title=None))
+    chart.update_xaxes(title=None, showgrid=False)
+    chart.update_yaxes(rangemode="tozero")
+    chart.update_layout(height=325, margin=dict(l=0, r=8, t=36, b=0),
+                        hovermode="x unified",
+                        legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
     st.plotly_chart(chart, width="stretch")
 
 with right:
     st.subheader("성적 집단별 공부 습관")
-    data["성적 집단"] = data["높은 성적"].map({True: "기준 충족", False: "기준 미충족"})
+    above, below = threshold, {"AA만": "AA 미만", "BA 이상": "BA 미만", "BB 이상": "BB 미만"}[threshold]
+    data["성적 집단"] = data["높은 성적"].map({True: above, False: below})
     mix = pd.crosstab(data["응답"], data["성적 집단"]).stack().rename("학생 수").reset_index()
     mix["비율"] = mix["학생 수"] / mix.groupby("성적 집단")["학생 수"].transform("sum") * 100
     chart = px.bar(
         mix, x="비율", y="응답", color="성적 집단", barmode="group",
-        color_discrete_map={"기준 충족": "#317972", "기준 미충족": "#bd7959"},
-        category_orders={"응답": order, "성적 집단": ["기준 충족", "기준 미충족"]},
+        color_discrete_map={above: "#63b9ad", below: "#e9a375"},
+        category_orders={"응답": order, "성적 집단": [above, below]},
         labels={"비율": "각 성적 집단에서 응답한 비율 (%)", "응답": ""},
         hover_data={"학생 수": True, "비율": ":.1f"},
     )
     chart.update_yaxes(autorange="reversed")
-    chart.update_layout(height=335, xaxis_range=[0, 100], margin=dict(l=0, r=8, t=55, b=0),
-                        legend=dict(orientation="h", y=1.04, title=None))
+    chart.update_layout(height=325, xaxis_range=[0, 100], margin=dict(l=0, r=8, t=36, b=0),
+                        legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
     st.plotly_chart(chart, width="stretch")
 
 st.caption("응답자가 적은 항목은 한 명의 성적이 비율을 크게 바꿀 수 있습니다. 설문과 성적에서 관찰된 차이에는 과목 난이도 등 다른 요인도 영향을 줄 수 있습니다.")
