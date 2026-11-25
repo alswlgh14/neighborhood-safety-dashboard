@@ -126,19 +126,46 @@ with right:
     st.subheader("성적 집단별 공부 습관")
     above, below = threshold, {"A+만": "A+ 미만", "B+ 이상": "B+ 미만", "B 이상": "B 미만"}[threshold]
     data["성적 집단"] = data["높은 성적"].map({True: above, False: below})
-    mix = pd.crosstab(data["응답"], data["성적 집단"]).stack().rename("학생 수").reset_index()
-    mix["비율"] = mix["학생 수"] / mix.groupby("성적 집단")["학생 수"].transform("sum") * 100
-    chart = px.bar(
-        mix, x="비율", y="응답", color="성적 집단", barmode="group",
+    counts = pd.crosstab(data["응답"], data["성적 집단"]).reindex(order)
+    totals = counts.sum(axis=0)
+    rates_by_grade = counts.div(totals, axis="columns") * 100
+    mix = counts.stack().rename("학생 수").reset_index()
+    mix["집단 인원"] = mix["성적 집단"].map(totals)
+    mix["비율"] = mix["학생 수"] / mix["집단 인원"] * 100
+    mix["표시"] = mix["비율"].map(lambda rate: f"{rate:.1f}%")
+    rows = dict(zip(order, range(len(order))))
+    mix["행"] = mix["응답"].map(rows)
+    chart = px.scatter(
+        mix, x="비율", y="행", color="성적 집단", symbol="성적 집단", text="표시",
         color_discrete_map={above: "#63b9ad", below: "#e9a375"},
-        category_orders={"응답": order, "성적 집단": [above, below]},
-        labels={"비율": "각 성적 집단에서 응답한 비율 (%)", "응답": ""},
-        hover_data={"학생 수": True, "비율": ":.1f"},
+        symbol_map={above: "circle", below: "diamond-open"},
+        category_orders={"성적 집단": [above, below]},
+        custom_data=["응답", "학생 수", "집단 인원"],
     )
-    chart.update_yaxes(autorange="reversed")
-    chart.update_layout(height=325, xaxis_range=[0, 100], margin=dict(l=0, r=8, t=36, b=0),
+    if above in totals and below in totals:
+        for response, row in rows.items():
+            chart.add_shape(
+                type="line", x0=rates_by_grade.at[response, above],
+                x1=rates_by_grade.at[response, below], y0=row, y1=row,
+                line=dict(color="#8794a3", width=2), layer="below",
+            )
+    chart.update_traces(
+        marker_size=9,
+        hovertemplate="%{customdata[0]} · %{x:.1f}%<br>"
+                      "%{customdata[1]}/%{customdata[2]}명",
+    )
+    chart.update_traces(selector=dict(name=above), textposition="top center")
+    chart.update_traces(selector=dict(name=below), textposition="bottom center")
+    chart.update_yaxes(title=None, tickvals=list(rows.values()), ticktext=order,
+                       range=[len(order) - 0.5, -0.5], showgrid=False)
+    chart.update_xaxes(title="각 성적 집단에서 응답한 비율", range=[-5, 105],
+                       tickvals=[0, 25, 50, 75, 100], ticksuffix="%")
+    chart.update_layout(height=max(325, 100 + 52 * len(order)),
+                        margin=dict(l=0, r=12, t=36, b=0),
                         legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
-    st.plotly_chart(chart, width="stretch")
+    st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
+    if len(totals) == 1:
+        st.caption("선택한 조건에서는 성적 집단 하나만 표시됩니다.")
 
 st.caption("응답자가 적은 항목은 한 명의 성적이 비율을 크게 바꿀 수 있습니다. 설문과 성적에서 관찰된 차이에는 과목 난이도 등 다른 요인도 영향을 줄 수 있습니다.")
 with st.expander("성적 표기 기준"):
