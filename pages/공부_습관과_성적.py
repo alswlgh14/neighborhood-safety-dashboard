@@ -14,7 +14,6 @@ QUESTIONS = {
     "주당 공부 시간": ("study_hours", {1: "없음", 2: "5시간 미만", 3: "6~10시간",
                                         4: "11~20시간", 5: "20시간 초과"}),
 }
-GRADES = ["Fail", "DD", "DC", "CC", "CB", "BB", "BA", "AA"]
 
 raw = pd.read_csv(Path(__file__).with_name("study.csv"))
 with st.sidebar:
@@ -27,7 +26,6 @@ with st.sidebar:
 cutoff = {"AA만": 7, "BA 이상": 6, "BB 이상": 5}[threshold]
 data = raw[raw.course_id.isin(courses)].copy() if courses else raw.copy()
 data["높은 성적"] = data.grade.ge(cutoff)
-data["성적 등급"] = data.grade.map(dict(enumerate(GRADES)))
 
 st.title("벼락치기 vs 꾸준히 공부")
 st.write("공부 습관이 다른 학생들은 과목 성적도 달랐을까?")
@@ -82,33 +80,38 @@ st.caption("막대 옆 숫자는 기준을 충족한 학생 수 / 해당 응답�
 
 left, right = st.columns(2)
 with left:
-    st.subheader("전체 성적 분포")
-    counts = pd.crosstab(data["응답"], data["성적 등급"]).reindex(
-        index=order, columns=GRADES, fill_value=0
+    st.subheader("공부 습관별 성적 분포")
+    bands = ["Fail–DC", "CC–BB", "BA–AA"]
+    grade_bands = dict(zip(range(8), [bands[0]] * 3 + [bands[1]] * 3 + [bands[2]] * 2))
+    distribution = data.assign(성적구간=data.grade.map(grade_bands))
+    counts = pd.crosstab(distribution["응답"], distribution["성적구간"]).reindex(
+        index=order, columns=bands, fill_value=0
     )
     totals = counts.sum(axis=1)
     dist = counts.stack().rename("학생 수").reset_index()
     dist["응답자 수"] = dist["응답"].map(totals)
     dist["비율"] = dist["학생 수"] / dist["응답자 수"] * 100
+    dist["표시"] = dist["비율"].map(lambda rate: f"{rate:.0f}%" if rate >= 12 else "")
     dist["응답 그룹"] = dist["응답"] + " (" + dist["응답자 수"].astype(str) + "명)"
     groups = [f"{label} ({totals[label]}명)" for label in order]
-    chart = px.scatter(
-        dist, x="성적 등급", y="비율", color="응답 그룹",
-        category_orders={"성적 등급": GRADES, "응답 그룹": groups},
-        color_discrete_sequence=["#63b9ad", "#e9a375", "#a6a3dc", "#c38da0", "#a6bc83"],
-        labels={"비율": "학생 비율 (%)"},
-        custom_data=["학생 수", "응답자 수"],
+    chart = px.bar(
+        dist, x="비율", y="응답 그룹", color="성적구간", text="표시",
+        orientation="h", barmode="stack",
+        category_orders={"성적구간": bands, "응답 그룹": groups},
+        color_discrete_map={"Fail–DC": "#d8977e", "CC–BB": "#c6cad4", "BA–AA": "#65bcb1"},
+        custom_data=["성적구간", "학생 수", "응답자 수"],
+        labels={"응답 그룹": "", "비율": "학생 비율 (%)"},
     )
     chart.update_traces(
-        marker=dict(size=8, opacity=0.82),
-        hovertemplate="%{y:.1f}% (%{customdata[0]}/%{customdata[1]}명)",
+        textposition="inside", insidetextanchor="middle", textfont_color="#172127",
+        hovertemplate="%{y} · %{customdata[0]}<br>"
+                      "%{x:.1f}% (%{customdata[1]}/%{customdata[2]}명)<extra></extra>",
     )
-    chart.update_xaxes(title=None, showgrid=False)
-    chart.update_yaxes(rangemode="tozero")
+    chart.update_xaxes(range=[0, 100], dtick=25, ticksuffix="%")
+    chart.update_yaxes(autorange="reversed")
     chart.update_layout(height=325, margin=dict(l=0, r=8, t=36, b=0),
-                        hovermode="x unified",
                         legend=dict(orientation="h", y=1.02, yanchor="bottom", title=None))
-    st.plotly_chart(chart, width="stretch")
+    st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
 
 
 with right:
