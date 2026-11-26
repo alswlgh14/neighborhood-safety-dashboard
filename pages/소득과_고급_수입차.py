@@ -115,15 +115,20 @@ def brand_chart(counts):
     for group, color in GROUP_COLORS.items():
         brands = [brand for brand in available.index if BRAND_GROUP[brand] == group]
         if brands:
+            registrations = available.loc[brands].astype(int).tolist()
             fig.add_bar(
-                x=available.loc[brands].astype(int).tolist(), y=brands,
+                x=registrations, y=brands,
                 orientation="h", name=group, marker_color=color,
+                text=[f"{count:,}대" for count in registrations],
+                textposition="outside", textangle=0, cliponaxis=False,
                 hovertemplate="%{y} · %{x:,}대<extra>%{fullData.name}</extra>",
             )
     if available.empty:
         fig.add_annotation(x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False,
                            text="선택한 연도에 확인된 등록대수가 없어요.")
     fig.update_xaxes(title="신규등록대수", tickformat=",d", ticksuffix="대", rangemode="tozero")
+    if not available.empty:
+        fig.update_xaxes(range=[0, max(1, int(available.max()) * 1.2)])
     fig.update_yaxes(categoryorder="array", categoryarray=available.index.tolist(), autorange="reversed")
     return layout(fig, max(235, 26 * len(available) + 86))
 
