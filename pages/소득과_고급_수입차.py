@@ -81,22 +81,31 @@ def trend_chart(years, totals):
     return layout(fig)
 
 
-def scatter_chart(points, totals):
+def growth_comparison_chart(points, totals):
     fig = go.Figure()
     series = [(MARKET_NAME, MARKET, "#A8ADB8", "diamond")]
     if totals is not None:
         series.append((SELECTED_NAME, totals, "#75AAD7", "circle"))
 
+    income = GNI_GROWTH.loc[points]
+    growth = [(name, (100 * values.pct_change()).loc[points], color, symbol)
+              for name, values, color, symbol in series]
+    if totals is not None:
+        for year in points:
+            fig.add_shape(
+                type="line", x0=growth[0][1].at[year], x1=growth[1][1].at[year],
+                y0=year, y1=year, line=dict(color="#747D8B", width=3), layer="below",
+            )
+
     correlations = []
-    for name, values, color, symbol in series:
-        changes = (100 * values.pct_change()).loc[points]
-        income = GNI_GROWTH.loc[points]
+    for name, changes, color, symbol in growth:
         fig.add_scatter(
-            x=income.tolist(), y=changes.tolist(), name=name, mode="markers+text",
-            customdata=points, text=[f"{year}년" for year in points],
-            textposition="bottom right" if symbol == "diamond" else "top left",
+            x=changes.tolist(), y=points, name=name, mode="markers+text",
+            customdata=income.tolist(), text=[f"{value:+.1f}%" for value in changes],
+            textposition="top center" if symbol == "diamond" else "bottom center",
+            cliponaxis=False,
             marker=dict(size=11, symbol=symbol, color=color),
-            hovertemplate="%{customdata}년<br>소득 %{x:+.1f}%<br>등록 %{y:+.1f}%<extra>%{fullData.name}</extra>",
+            hovertemplate="%{y}년<br>실질 GNI %{customdata:+.1f}%<br>등록 %{x:+.1f}%<extra>%{fullData.name}</extra>",
         )
         if len(points) >= 3 and changes.nunique() >= 2:
             correlations.append(f"{name} r = {income.corr(changes):+.2f}")
@@ -104,8 +113,18 @@ def scatter_chart(points, totals):
     if not points:
         fig.add_annotation(x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False,
                            text="표시 기간에 전년 대비 비교가 가능한 연도가 없어요.")
-    fig.update_xaxes(title="1인당 실질 GNI 증가율", ticksuffix="%", zeroline=True)
-    fig.update_yaxes(title="신규등록 증가율", ticksuffix="%", zeroline=True)
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+    else:
+        values = [0, *(value for _, changes, _, _ in growth for value in changes)]
+        padding = max(1.0, 0.15 * (max(values) - min(values)))
+        fig.add_vline(x=0, line_dash="dot", line_color="#9098A4", layer="below")
+        fig.update_xaxes(title="전년 대비 신규등록 증감률", ticksuffix="%",
+                         zeroline=False, range=[min(values) - padding, max(values) + padding])
+        fig.update_yaxes(
+            tickvals=points, ticktext=[f"{year}년<br>실질 GNI {income.at[year]:+.1f}%" for year in points],
+            range=[points[-1] + 0.55, points[0] - 0.55], showgrid=False, automargin=True,
+        )
     return layout(fig), correlations
 
 
@@ -209,13 +228,13 @@ def main():
     st.plotly_chart(trend_chart(years, totals), config=config, key="imports_trend")
     st.caption("선택한 첫해를 100으로 맞췄어요. 전국 수치는 승용·승합·화물·특수차를 포함하고, 브랜드별 수치는 수입 승용차 집계예요.")
 
-    st.subheader("소득이 늘어난 해의 신규등록 증가율")
+    st.subheader("소득이 늘어난 해, 자동차 등록은 얼마나 바뀌었을까?")
     points = [year for year in years if year > YEARS[0]]
-    scatter, correlations = scatter_chart(points, totals)
-    st.plotly_chart(scatter, config=config, key="imports_scatter")
+    comparison, correlations = growth_comparison_chart(points, totals)
+    st.plotly_chart(comparison, config=config, key="imports_growth_comparison")
     if correlations:
         st.caption("피어슨 상관계수 · " + " / ".join(correlations) + f" · 비교 연도 {len(points)}개")
-    st.caption("각 점은 한 해의 전년 대비 증가율이에요. 브랜드 자료는 최대 3개 연도만 비교할 수 있어 상관계수는 참고용이에요.")
+    st.caption("왼쪽의 실질 GNI는 1인당 소득의 전년 대비 증가율이에요. 두 점 사이가 멀수록 그해 전국과 선택 브랜드의 등록 증감률 차이가 커요. 관측 연도가 최대 3개라 상관계수는 참고용이에요.")
 
     st.subheader(f"{end}년 브랜드별 신규등록대수")
     st.plotly_chart(brand_chart(latest), config=config, key="imports_brands")
